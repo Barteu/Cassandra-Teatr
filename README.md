@@ -1,4 +1,4 @@
-# Cassandra-Teatr
+# Cassandra-Theatre
 SRDS project
 
 ### Create schema
