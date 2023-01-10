@@ -1,5 +1,5 @@
 import os
-from utils import validate_email, validate_date
+from utils import validate_email, validate_date_time, get_various_titles, validate_date
 import uuid
 import datetime as dt
 
@@ -27,7 +27,8 @@ class Application:
             print('O - Log out')
         else:
             print(f"{'L - Log in':<20}{'A - Create account':<20}")
-        print(f"{'X - exit':<20}{'P - show programme':<20}")
+        print(f"{'P - show programme':<20}{'S - Search':<20}")
+        print(f"{'X - exit':<20}")
 
         # if user is a staff member
         if self.user_email and self.user_email.split('@')[1] == 'theatre.com':
@@ -95,11 +96,11 @@ class Application:
                 correct = True
 
                 start_date = input("Start date (yyyy‑mm‑dd HH:MM): ")
-                if validate_date(start_date) is False:
+                if validate_date_time(start_date) is False:
                     correct = False
 
                 end_date = input("End date (yyyy‑mm‑dd HH:MM): ")
-                if validate_date(end_date) is False:
+                if validate_date_time(end_date) is False:
                     correct = False
                 
                 if correct:
@@ -119,7 +120,46 @@ class Application:
                                        end_dates[i],
                                        performance_id)
 
+            self.db.insert_performance_seats_batch(performance_id, [x for x in range(1,51)], [title],[start_dates[i]],[None])
+
+        self.message='Performance(s) has been added.'
+
+    def search_performance(self):
+        title = input('Title (or press enter if all): ')
+        start_date = input('Date (yyyy‑mm‑dd or yyyy‑mm‑dd HH:MM) (or press enter if all): ')
+        performances = []
+        # only title        
+        if len(title)>1 and len(start_date)<10:
+            performances = self.db.select_current_performances_by_title(get_various_titles(title))
+        # only date with hours  
+        elif len(title)<=1 and validate_date_time(start_date):
+
+            date = dt.datetime.strptime(start_date, '%Y-%m-%d %H:%M')
+            performances = self.db.select_performances_by_date(date,(date+dt.timedelta(days=1)).date())
+        #  only date
+        elif len(title)<=1 and validate_date(start_date):
+
+            date = dt.datetime.strptime(start_date, '%Y-%m-%d')
+            performances = self.db.select_performances_by_date(date,date+dt.timedelta(days=1))
+        # title and date with hours  
+        elif len(title)>1  and validate_date_time(start_date):
+
+            date = dt.datetime.strptime(start_date, '%Y-%m-%d %H:%M')
+            performances = self.db.select_performances_by_title_and_date(get_various_titles(title), date,(date+dt.timedelta(days=1)).date())
+
+        # title and date
+        elif len(title)>1 and validate_date(start_date):
+
+            date = dt.datetime.strptime(start_date, '%Y-%m-%d')
+            performances = self.db.select_performances_by_title_and_date(get_various_titles(title),date,date+dt.timedelta(days=1))
+
+        for i,performance in enumerate(performances):
+            print(f"{i+1}. {performance.title:<32} {performance.start_date.strftime('%Y-%m-%d %H:%M')} - {performance.end_date.strftime('%H:%M')}")
         
+
+
+        input('Press any key to continue..')
+
     def do_action(self, action):
         switcher={
                 'X':self.stop_app,
@@ -127,7 +167,8 @@ class Application:
                 'L':self.log_in,
                 'O':self.log_out,
                 'P':self.show_programme,
-                'N':self.add_performance
+                'N':self.add_performance,
+                'S':self.search_performance
                 }
         func=switcher.get(action.upper(),lambda : None)
         func()

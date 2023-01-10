@@ -18,7 +18,8 @@ CREATE TABLE performances (
   end_date timestamp,
   performance_id uuid,
   PRIMARY KEY (title, start_date)
-);
+)
+WITH CLUSTERING ORDER BY (start_date ASC);
 
 CREATE TABLE tickets (
   email varchar, 

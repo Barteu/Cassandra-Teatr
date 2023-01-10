@@ -1,4 +1,7 @@
 from cassandra.cluster import Cluster
+from cassandra.cqlengine.query import BatchStatement
+from cassandra import ConsistencyLevel
+
 import time
 
 class Database():
@@ -13,6 +16,15 @@ class Database():
             raise e
 
         self.insert_performance_stmt = None
+        self.insert_user_stmt = None
+        self.select_email_stmt = None
+        self.select_user_stmt = None
+        self.select_current_performances_stmt = None
+        self.insert_performance_seat_stmt = None
+        self.select_current_performances_by_title_stmt = None
+        self.select_performances_by_date_stmt = None
+        self.select_performances_by_title_and_date_stmt = None
+
         self.prepare_statements()
 
     def finalize(self):
@@ -25,6 +37,14 @@ class Database():
     def prepare_statements(self):
         try:
             self.insert_performance_stmt = self.session.prepare("INSERT INTO performances (title, start_date, end_date, performance_id) VALUES (?,?,?,?) IF NOT EXISTS")
+            self.insert_user_stmt =  self.session.prepare("INSERT INTO users (email, first_name, last_name) VALUES (?,?,?);")
+            self.select_email_stmt = self.session.prepare("SELECT email from users WHERE email=?;")
+            self.select_user_stmt = self.session.prepare("SELECT * from users WHERE email=?;")
+            self.select_current_performances_stmt = self.session.prepare("SELECT * FROM performances where start_date>toTimestamp(now()) ALLOW FILTERING;")
+            self.insert_performance_seat_stmt = self.session.prepare("INSERT INTO performance_seats (performance_id, seat_number, title, start_date, taken_by) VALUES (?,?,?,?,?);")
+            self.select_current_performances_by_title_stmt = self.session.prepare("SELECT * FROM performances where title IN ? and start_date>toTimestamp(now());")
+            self.select_performances_by_date_stmt = self.session.prepare("SELECT * FROM performances where start_date>=? and start_date<? ALLOW FILTERING;")
+            self.select_performances_by_title_and_date_stmt = self.session.prepare("SELECT * FROM performances where title IN ? and start_date>=? and start_date<?")
         except Exception as e:
             print("Could not prepare statements. ", e)
             raise e
@@ -65,7 +85,7 @@ class Database():
 
     def select_user(self, email):
         try:
-            row = self.session.execute("SELECT * from users WHERE email=%s;",[email]).one()
+            row = self.session.execute(self.select_user_stmt,[email]).one()
             if row:
                 return row
             return False
@@ -75,10 +95,10 @@ class Database():
 
     def insert_user(self, email, first_name, last_name):
         try:
-            rows = self.session.execute("SELECT email from users WHERE email=%s",(email))
+            rows = self.session.execute(self.select_email_stmt,[email])
             if rows.one():
                 return False
-            self.session.execute("INSERT INTO users (email, first_name, last_name) VALUES (%s,%s,%s);",(email,first_name,last_name))
+            self.session.execute(self.insert_user_stmt,[email,first_name,last_name])
             return True
         except Exception as e:
             print(e)
@@ -88,11 +108,11 @@ class Database():
     def select_current_performances(self):
         rows = []
         try:
-            rows = self.session.execute('SELECT * FROM performances where start_date>toTimestamp(now()) ALLOW FILTERING;')
+            rows = self.session.execute(self.select_current_performances_stmt)
         except Exception as e:
             print(e)
         return rows
-
+    
     def insert_performance(self, title, start_date, end_date, uuid):
         try:
             result = self.session.execute(self.insert_performance_stmt,[title, start_date, end_date, uuid])
@@ -101,3 +121,53 @@ class Database():
         except Exception as e:
             print("Could not insert performance. ", e)
         return False
+
+    def insert_performance_seat(self, performance_id, seat_number, title=None, start_date=None, taken_by = None):
+        try:
+            result = self.session.execute(self.insert_performance_seat_stmt, [performance_id, seat_number, title, start_date, taken_by])
+            if result.one().applied:
+                return True
+        except Exception as e:
+            print("Could not insert performance seat. ", e)
+        return False
+
+    def insert_performance_seats_batch(self, performance_id, seat_numbers, titles, start_dates, taken_by):
+        try:
+            batch = BatchStatement(consistency_level=ConsistencyLevel.ONE)
+            for i in range(len(seat_numbers)):
+                 batch.add(self.insert_performance_seat_stmt,[performance_id, 
+                                                              seat_numbers[i], 
+                                                              titles[i] if len(titles)>i else None,
+                                                              start_dates[i] if len(start_dates)>i else None,
+                                                              taken_by[i] if len(taken_by)>i else None])
+
+            self.session.execute(batch)
+            return True
+        except Exception as e:
+            print("Could not batch insert performance seats. ", e)
+        return False
+
+    def select_current_performances_by_title(self, titles):
+        rows = []
+        try:
+            rows = self.session.execute(self.select_current_performances_by_title_stmt,[titles])
+        except Exception as e:
+            print(e)
+        return rows
+
+
+    def select_performances_by_date(self, date_from, date_to):
+        rows = []
+        try:
+            rows = self.session.execute(self.select_performances_by_date_stmt,[date_from,date_to])
+        except Exception as e:
+            print(e)
+        return rows
+
+    def select_performances_by_title_and_date(self, titles, date_from ,date_to):
+        rows = []
+        try:
+            rows = self.session.execute(self.select_performances_by_title_and_date_stmt,[titles,date_from,date_to])
+        except Exception as e:
+            print(e)
+        return rows

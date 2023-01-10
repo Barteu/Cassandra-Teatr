@@ -8,9 +8,24 @@ def validate_email(email):
     else:
       return False
 
-def validate_date(date_text):
+def validate_date_time(date_text):
       try:
           dt.datetime.strptime(date_text, '%Y-%m-%d %H:%M')
           return True
       except ValueError:
           return False
+
+def validate_date(date_text):
+      try:
+          dt.datetime.strptime(date_text, '%Y-%m-%d')
+          return True
+      except ValueError:
+          return False
+
+
+def get_various_titles(title):
+  titles = [title]
+  titles.append(title.lower())
+  titles.append(title.upper())
+  titles.append(title.title())
+  return titles
