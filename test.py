@@ -25,16 +25,16 @@ if __name__ == "__main__":
     #     print(row)
 
     p_uuid = uuid.uuid1()
-    db.insert_performance('Little Red Riding Hood', dt.datetime.strptime('2023-01-16 12:00', '%Y-%m-%d %H:%M'), dt.datetime.strptime('2023-01-16 13:15', '%Y-%m-%d %H:%M'), p_uuid)
-    db.insert_performance_seats_batch(p_uuid, [x for x in range(1,51)], ['Little Red Riding Hood'],[dt.datetime.strptime('2023-01-16 12:00', '%Y-%m-%d %H:%M')],[None])
+    db.insert_performance(dt.datetime.strptime('2023-01-16', '%Y-%m-%d'), dt.datetime.strptime('2023-01-16 12:00', '%Y-%m-%d %H:%M'), 'Little Red Riding Hood'.lower(), dt.datetime.strptime('2023-01-16 13:15', '%Y-%m-%d %H:%M'), p_uuid)
+    db.insert_performance_seats_batch(p_uuid, [x for x in range(1,51)], ['Little Red Riding Hood'.lower()],[dt.datetime.strptime('2023-01-16 12:00', '%Y-%m-%d %H:%M')],[None])
 
     p_uuid2 = uuid.uuid1()
-    db.insert_performance('Shrek', dt.datetime.strptime('2023-01-17 13:00', '%Y-%m-%d %H:%M'), dt.datetime.strptime('2023-01-17 15:00', '%Y-%m-%d %H:%M'), p_uuid2)
-    db.insert_performance_seats_batch(p_uuid2, [x for x in range(1,51)], ['Shrek'],[dt.datetime.strptime('2023-01-17 15:00', '%Y-%m-%d %H:%M')],[None])
+    db.insert_performance( dt.datetime.strptime('2023-01-17', '%Y-%m-%d'), dt.datetime.strptime('2023-01-17 13:00', '%Y-%m-%d %H:%M'), 'Shrek'.lower(), dt.datetime.strptime('2023-01-17 15:00', '%Y-%m-%d %H:%M'), p_uuid2)
+    db.insert_performance_seats_batch(p_uuid2, [x for x in range(1,51)], ['Shrek'.lower()],[dt.datetime.strptime('2023-01-17 15:00', '%Y-%m-%d %H:%M')],[None])
 
     p_uuid3 = uuid.uuid1()
-    db.insert_performance('Shrek', dt.datetime.strptime('2023-01-18 13:00', '%Y-%m-%d %H:%M'), dt.datetime.strptime('2023-01-18 15:00', '%Y-%m-%d %H:%M'), p_uuid3)
-    db.insert_performance_seats_batch(p_uuid3, [x for x in range(1,51)], ['Shrek'],[dt.datetime.strptime('2023-01-18 15:00', '%Y-%m-%d %H:%M')],[None])
+    db.insert_performance(dt.datetime.strptime('2023-01-18', '%Y-%m-%d'), dt.datetime.strptime('2023-01-18 13:00', '%Y-%m-%d %H:%M'), 'Shrek'.lower(), dt.datetime.strptime('2023-01-18 15:00', '%Y-%m-%d %H:%M'), p_uuid3)
+    db.insert_performance_seats_batch(p_uuid3, [x for x in range(1,51)], ['Shrek'.lower()],[dt.datetime.strptime('2023-01-18 15:00', '%Y-%m-%d %H:%M')],[None])
 
 
 
@@ -46,13 +46,11 @@ if __name__ == "__main__":
     # for row in rows:
     #     print(row)
 
-    # rows = db.select_current_performances_by_title(get_various_titles('shrek'))
-    # for row in rows:
-    #     print(row)
-
-    rows = db.select_performances_by_date(dt.datetime.strptime('2023-01-18', '%Y-%m-%d'),dt.datetime.strptime('2023-01-18', '%Y-%m-%d')+dt.timedelta(days=1))
+    rows = db.select_performances_by_dates([dt.datetime.strptime('2023-01-17', '%Y-%m-%d'),
+                                            dt.datetime.strptime('2023-01-18', '%Y-%m-%d')])
     for row in rows:
         print(row)
+
 
 
 

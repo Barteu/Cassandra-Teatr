@@ -73,7 +73,8 @@ class Application:
         self.user_email = str()
 
     def show_programme(self):
-        performances = self.db.select_current_performances()
+        dates = [ dt.datetime.today().date()+dt.timedelta(days=i) for i in range(14)]
+        performances = self.db.select_performances_by_dates(dates)
         for i,performance in enumerate(performances):
             print(f"{i+1}. {performance.title:<32} {performance.start_date.strftime('%Y-%m-%d %H:%M')} - {performance.end_date.strftime('%H:%M')}")
         input('Press any key to continue..')
@@ -126,32 +127,23 @@ class Application:
 
     def search_performance(self):
         title = input('Title (or press enter if all): ')
-        start_date = input('Date (yyyy‑mm‑dd or yyyy‑mm‑dd HH:MM) (or press enter if all): ')
+        p_date = input('Date (yyyy‑mm‑dd) (or press enter if all): ')
         performances = []
         # only title        
-        if len(title)>1 and len(start_date)<10:
-            performances = self.db.select_current_performances_by_title(get_various_titles(title))
-        # only date with hours  
-        elif len(title)<=1 and validate_date_time(start_date):
-
-            date = dt.datetime.strptime(start_date, '%Y-%m-%d %H:%M')
-            performances = self.db.select_performances_by_date(date,(date+dt.timedelta(days=1)).date())
+        if len(title)>1 and (validate_date(p_date) is False):
+            dates = [ dt.datetime.today().date()+dt.timedelta(days=i) for i in range(30)]
+            performances = self.db.select_performances_by_dates(dates)
+            performances = [p for p in performances if p.title == title.lower()]
         #  only date
-        elif len(title)<=1 and validate_date(start_date):
-
-            date = dt.datetime.strptime(start_date, '%Y-%m-%d')
-            performances = self.db.select_performances_by_date(date,date+dt.timedelta(days=1))
-        # title and date with hours  
-        elif len(title)>1  and validate_date_time(start_date):
-
-            date = dt.datetime.strptime(start_date, '%Y-%m-%d %H:%M')
-            performances = self.db.select_performances_by_title_and_date(get_various_titles(title), date,(date+dt.timedelta(days=1)).date())
-
+        elif len(title)<=1 and validate_date(p_date):
+            date = dt.datetime.strptime(p_date, '%Y-%m-%d')
+            performances = self.db.select_performances_by_dates([date])
+      
         # title and date
-        elif len(title)>1 and validate_date(start_date):
-
-            date = dt.datetime.strptime(start_date, '%Y-%m-%d')
-            performances = self.db.select_performances_by_title_and_date(get_various_titles(title),date,date+dt.timedelta(days=1))
+        elif len(title)>1 and validate_date(p_date):
+            date = dt.datetime.strptime(p_date, '%Y-%m-%d')
+            performances = self.db.select_performances_by_dates([date])
+            performances = [p for p in performances if p.title == title.lower()]
 
         for i,performance in enumerate(performances):
             print(f"{i+1}. {performance.title:<32} {performance.start_date.strftime('%Y-%m-%d %H:%M')} - {performance.end_date.strftime('%H:%M')}")

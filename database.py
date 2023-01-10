@@ -19,11 +19,9 @@ class Database():
         self.insert_user_stmt = None
         self.select_email_stmt = None
         self.select_user_stmt = None
-        self.select_current_performances_stmt = None
         self.insert_performance_seat_stmt = None
-        self.select_current_performances_by_title_stmt = None
-        self.select_performances_by_date_stmt = None
-        self.select_performances_by_title_and_date_stmt = None
+        self.select_performances_by_dates_stmt = None
+        self.select_performances_by_dates_and_title_stmt = None
 
         self.prepare_statements()
 
@@ -36,15 +34,12 @@ class Database():
 
     def prepare_statements(self):
         try:
-            self.insert_performance_stmt = self.session.prepare("INSERT INTO performances (title, start_date, end_date, performance_id) VALUES (?,?,?,?) IF NOT EXISTS")
+            self.insert_performance_stmt = self.session.prepare("INSERT INTO performances (p_date, start_date, title, end_date, performance_id) VALUES (?, ?,?,?,?) IF NOT EXISTS")
             self.insert_user_stmt =  self.session.prepare("INSERT INTO users (email, first_name, last_name) VALUES (?,?,?);")
             self.select_email_stmt = self.session.prepare("SELECT email from users WHERE email=?;")
             self.select_user_stmt = self.session.prepare("SELECT * from users WHERE email=?;")
-            self.select_current_performances_stmt = self.session.prepare("SELECT * FROM performances where start_date>toTimestamp(now()) ALLOW FILTERING;")
+            self.select_performances_by_dates_stmt = self.session.prepare("SELECT * FROM performances where p_date in ?;")
             self.insert_performance_seat_stmt = self.session.prepare("INSERT INTO performance_seats (performance_id, seat_number, title, start_date, taken_by) VALUES (?,?,?,?,?);")
-            self.select_current_performances_by_title_stmt = self.session.prepare("SELECT * FROM performances where title IN ? and start_date>toTimestamp(now());")
-            self.select_performances_by_date_stmt = self.session.prepare("SELECT * FROM performances where start_date>=? and start_date<? ALLOW FILTERING;")
-            self.select_performances_by_title_and_date_stmt = self.session.prepare("SELECT * FROM performances where title IN ? and start_date>=? and start_date<?")
         except Exception as e:
             print("Could not prepare statements. ", e)
             raise e
@@ -103,19 +98,10 @@ class Database():
         except Exception as e:
             print(e)
         return None
-
-
-    def select_current_performances(self):
-        rows = []
-        try:
-            rows = self.session.execute(self.select_current_performances_stmt)
-        except Exception as e:
-            print(e)
-        return rows
     
-    def insert_performance(self, title, start_date, end_date, uuid):
+    def insert_performance(self, p_date,start_date, title, end_date, uuid):
         try:
-            result = self.session.execute(self.insert_performance_stmt,[title, start_date, end_date, uuid])
+            result = self.session.execute(self.insert_performance_stmt,[p_date, start_date,title, end_date, uuid])
             if result.one().applied:
                 return True
         except Exception as e:
@@ -147,27 +133,12 @@ class Database():
             print("Could not batch insert performance seats. ", e)
         return False
 
-    def select_current_performances_by_title(self, titles):
+    def select_performances_by_dates(self, dates):
         rows = []
         try:
-            rows = self.session.execute(self.select_current_performances_by_title_stmt,[titles])
+            rows = self.session.execute(self.select_performances_by_dates_stmt,[dates])
         except Exception as e:
             print(e)
         return rows
 
 
-    def select_performances_by_date(self, date_from, date_to):
-        rows = []
-        try:
-            rows = self.session.execute(self.select_performances_by_date_stmt,[date_from,date_to])
-        except Exception as e:
-            print(e)
-        return rows
-
-    def select_performances_by_title_and_date(self, titles, date_from ,date_to):
-        rows = []
-        try:
-            rows = self.session.execute(self.select_performances_by_title_and_date_stmt,[titles,date_from,date_to])
-        except Exception as e:
-            print(e)
-        return rows

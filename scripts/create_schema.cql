@@ -6,18 +6,19 @@ USE Theatre;
 CREATE TABLE performance_seats (
   performance_id uuid ,
   seat_number int,
-  title varchar,
+  title varchar, -- in lowercase
   start_date timestamp,
   taken_by varchar, -- user's email
   PRIMARY KEY (performance_id, seat_number)
 );
 
 CREATE TABLE performances (
-  title varchar,
+  p_date date,
+  title varchar, -- in lowercase
   start_date timestamp,
   end_date timestamp,
   performance_id uuid,
-  PRIMARY KEY (title, start_date)
+  PRIMARY KEY (p_date, start_date, title)
 )
 WITH CLUSTERING ORDER BY (start_date ASC);
 

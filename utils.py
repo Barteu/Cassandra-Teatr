@@ -23,9 +23,9 @@ def validate_date(date_text):
           return False
 
 
-def get_various_titles(title):
-  titles = [title]
-  titles.append(title.lower())
-  titles.append(title.upper())
-  titles.append(title.title())
-  return titles
+# def get_various_titles(title):
+#   titles = [title]
+#   titles.append(title.lower())
+#   titles.append(title.upper())
+#   titles.append(title.title())
+#   return titles
