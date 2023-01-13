@@ -168,7 +168,6 @@ class Database():
                                                               titles[i] if len(titles)>i else None,
                                                               start_dates[i] if len(start_dates)>i else None,
                                                               taken_by[i] if len(taken_by)>i else None])
-
             self.session.execute(batch)
             return True
         except Exception as e:
