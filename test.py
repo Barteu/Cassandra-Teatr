@@ -27,8 +27,7 @@ if __name__ == "__main__":
     db.insert_performance(dt.datetime.strptime('2023-01-16', '%Y-%m-%d'), dt.datetime.strptime('2023-01-16 12:00', '%Y-%m-%d %H:%M'), 'Little Red Riding Hood'.lower(), dt.datetime.strptime('2023-01-16 13:15', '%Y-%m-%d %H:%M'), p_uuid)
     db.insert_performance_seats_batch(p_uuid, [x for x in range(1,51)], ['Little Red Riding Hood'.lower()],[dt.datetime.strptime('2023-01-16 12:00', '%Y-%m-%d %H:%M')],[None])
 
-    db.update_performance_seat_take_seat(p_uuid, 4, 'john.doe@email.com')
-
+    db.update_performance_seat_take_seat_batch(p_uuid, [4,5,6], 'john.doe@email.com')
 
 #    db.update_performance_seat_take_seat(p_uuid, 4, 'cezary@theatre.com')
 
@@ -36,7 +35,8 @@ if __name__ == "__main__":
 
     #db.update_performance_seat_take_seat_batch(p_uuid, [7,8,9,10], 'john.doe@email.com')
 
-    db.insert_user_ticket('john.doe@email.com', p_uuid, 4, 'john', 'doe')
+    result = db.insert_user_ticket_batch('john.doe@email.com', p_uuid, [4,5,6], ['john','joe', 'dezz'], ['doe', 'mamma', 'nuts'])
+    print(result)
     #db.insert_user_ticket('john.doe@email.com', p_uuid, 4, 'john', 'doe')
 
 

@@ -22,14 +22,12 @@ class Database():
         self.insert_performance_seat_stmt = None
         self.select_performances_by_dates_stmt = None
         self.select_performances_by_dates_and_title_stmt = None
-        # Start TODO
         self.select_user_tickets_stmt = None
         self.insert_user_ticket_stmt = None
         self.update_performance_seat_take_seat_stmt = None
         self.update_performance_seat_free_seat_stmt = None
         self.select_performance_seats_stmt = None 
         self.select_performance_seat_performance_info_stmt = None
-        # End TODO
 
         self.prepare_statements()
 
@@ -189,7 +187,6 @@ class Database():
             print(e)
         return rows
 
-    # Start TODO
     def select_user_tickets(self, email):
         rows = []
         try:
@@ -201,11 +198,24 @@ class Database():
     def insert_user_ticket(self, email, performance_id, seat_number, first_name, last_name):
         try:
             result = self.session.execute(self.insert_user_ticket_stmt,[email, performance_id, seat_number, first_name, last_name])
-            if result.one().applied:
+            if result.next().applied():
                 return True
             print("Could not insert user ticket.")
         except Exception as e:
             print("Could not insert user ticket.", e)
+        return False
+
+    def insert_user_ticket_batch(self, email, performance_id, seat_numbers, first_names, last_names):
+        try:
+            batch = BatchStatement(consistency_level=ConsistencyLevel.ONE)
+            for i, seat_number in enumerate(seat_numbers):
+                batch.add(self.insert_user_ticket_stmt,[email, performance_id, seat_number, first_names[i], last_names[i]])
+            result = self.session.execute(batch)
+            if result.one().applied:
+                return True
+            print("Could not insert user tickets.")
+        except Exception as e:
+            print("Could not insert user tickets.", e)
         return False
 
     def update_performance_seat_take_seat(self, performance_id, seat_number, email):
@@ -262,4 +272,3 @@ class Database():
         except Exception as e:
             print(e)
         return None
-    # End TODO

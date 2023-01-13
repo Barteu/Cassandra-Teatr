@@ -15,34 +15,34 @@ VALUES ('2023-01-21', '2023-01-21 17:00:00', 'romeo and juliet','2023-01-21 18:3
 -- Performance Seats
 
 INSERT INTO performance_seats (performance_id, seat_number, title, start_date, taken_by)
-VALUES (c105a644-903d-11ed-a1eb-0242ac120002,0, 'romeo and juliet', '2023-01-08 17:00:00', null);
+VALUES (c105a644-903d-11ed-a1eb-0242ac120002,1, 'romeo and juliet', '2023-01-08 17:00:00', null);
 
 INSERT INTO performance_seats (performance_id, seat_number, taken_by)
-VALUES (c105a644-903d-11ed-a1eb-0242ac120002,1, null);
+VALUES (c105a644-903d-11ed-a1eb-0242ac120002,2, null);
 
 INSERT INTO performance_seats (performance_id, seat_number, taken_by)
-VALUES (c105a644-903d-11ed-a1eb-0242ac120002,2, 'john.doe@email.com');
+VALUES (c105a644-903d-11ed-a1eb-0242ac120002,3, 'john.doe@email.com');
 
 
 
 INSERT INTO performance_seats (performance_id, seat_number, title, start_date, taken_by)
-VALUES (c105a644-903d-11ed-a1eb-0242ac120003,0, 'romeo and juliet', '2023-01-20 17:00:00', null);
-
-INSERT INTO performance_seats (performance_id, seat_number, taken_by)
-VALUES (c105a644-903d-11ed-a1eb-0242ac120003,1, null);
+VALUES (c105a644-903d-11ed-a1eb-0242ac120003,1, 'romeo and juliet', '2023-01-20 17:00:00', null);
 
 INSERT INTO performance_seats (performance_id, seat_number, taken_by)
 VALUES (c105a644-903d-11ed-a1eb-0242ac120003,2, null);
 
+INSERT INTO performance_seats (performance_id, seat_number, taken_by)
+VALUES (c105a644-903d-11ed-a1eb-0242ac120003,3, null);
+
 
 INSERT INTO performance_seats (performance_id, seat_number, title, start_date, taken_by)
-VALUES (c105a644-903d-11ed-a1eb-0242ac120004,0, 'romeo and juliet', '2023-01-21 17:00:00', null);
-
-INSERT INTO performance_seats (performance_id, seat_number, taken_by)
-VALUES (c105a644-903d-11ed-a1eb-0242ac120004,1, null);
+VALUES (c105a644-903d-11ed-a1eb-0242ac120004,1, 'romeo and juliet', '2023-01-21 17:00:00', null);
 
 INSERT INTO performance_seats (performance_id, seat_number, taken_by)
 VALUES (c105a644-903d-11ed-a1eb-0242ac120004,2, null);
+
+INSERT INTO performance_seats (performance_id, seat_number, taken_by)
+VALUES (c105a644-903d-11ed-a1eb-0242ac120004,3, null);
 
 -- Users
 

@@ -172,33 +172,40 @@ class Application:
 
         input('Press any key to continue..')
 
-    def buy_tickets(self, performance_id): # start TODO
+    def buy_tickets(self, performance_id):
         if not self.user_email:
-            print('User needs to be logged in')
+            self.message = 'User needs to be logged in'
             return
         try:
             num_tickets = int(input('How many tickets would you like to buy: '))
         except:
-            print('Wrong input')
+            self.message = 'Wrong input'
             return
         
         seat_numbers = [int(input(f'Enter seat number for ticket {i+1}: ')) for i in range(num_tickets)]
+        first_names = []
+        last_names = []
+        for seat_number in seat_numbers:
+            first_names.append(input(f'Enter first name of the ticket (seat {seat_number}) owner: '))
+            last_names.append(input(f'Enter last name of the ticket (seat {seat_number}) owner: '))
+
 
         sucess = self.db.update_performance_seat_take_seat_batch(performance_id, seat_numbers, self.user_email)
             
         if sucess:
-            for seat_number in seat_numbers:
-                first_name = input(f'Enter first name of the ticket (seat {seat_number}) owner: ')
-                last_name = input(f'Enter last name of the ticket (seat {seat_number}) owner: ')
-
-                self.db.insert_user_ticket(self.user_email, performance_id, seat_number, first_name, last_name)
+            result = self.db.insert_user_ticket_batch(self.user_email, performance_id, seat_numbers, first_names, last_names)
+            if result:
+                self.message = 'Bought tickets'
+            else:
+                self.message = 'Could not buy tickets, contact support'
+ 
         else:
-            print('Could not buy tickets, make sure seats are aviable')
+            self.message = 'Could not buy tickets, make sure seats are aviable'
  
 
     def show_user_tickets(self):
         if not self.user_email:
-            print('User needs to be logged in')
+            self.message = 'User needs to be logged in'
             input('Press any key to continue..')
             return
         tickets = self.db.select_user_tickets(self.user_email)
@@ -217,8 +224,7 @@ class Application:
     
     def show_performance_seats(self):
         if(len(self.last_performances_select) == 0):
-            print('Search performances first')
-            input('Press any key to continue..')
+            self.message = 'Search performances first'
             return
         for i,performance in enumerate(self.last_performances_select):
             print(f"{i+1}. {performance['title']:<32} {performance['start_date'].strftime('%Y-%m-%d %H:%M')} - {performance['end_date'].strftime('%H:%M')}")
@@ -226,8 +232,7 @@ class Application:
         performance_number = int(input('Enter chosen performance number: ')) - 1
 
         if performance_number >= len(self.last_performances_select):
-            print('performance number is too big')
-            input('Press any key to continue..')
+            self.message = 'performance number is too big'
             return
         
         performance_id = self.last_performances_select[performance_number]['performance_id']
@@ -250,9 +255,6 @@ class Application:
 
         if wanna_buy_ticket.upper() == 'Y':
             self.buy_tickets(performance_id)
-
-        input('Press any key to continue..')
-        #end TODO
 
     def do_action(self, action):
         switcher={
