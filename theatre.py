@@ -4,9 +4,12 @@ from database import Database
 import sys
 
 if __name__ == "__main__":
- 
+    
+    f = open("contact_points.txt", "r")
+    contact_points = [cp for cp in f.read().splitlines()]
+
     try:
-        db = Database()
+        db = Database(contact_points)
     except Exception as e:
         print(e)
         sys.exit("Could not connect to DB, try later")

@@ -8,6 +8,7 @@ class Database():
 
     def __init__(self, addresses=['0.0.0.0'], port=9042, timeout=10):
         self.cluster = Cluster(addresses, port, connect_timeout=120)
+        self.addresses = addresses
         try:
             self.session = self.cluster.connect('theatre', wait_for_all_pools=True)
             self.session.request_timeout = timeout
@@ -54,8 +55,13 @@ class Database():
             self.select_user_stmt.consistency_level = ConsistencyLevel.ONE
 
             self.select_performances_by_dates_stmt = self.session.prepare("SELECT * FROM performances where p_date in ?;")
-            self.select_performances_by_dates_stmt.consistency_level = ConsistencyLevel.THREE
-            
+            if len(self.addresses)>2:
+                self.select_performances_by_dates_stmt.consistency_level = ConsistencyLevel.THREE
+            elif len(self.addresses)==2:
+                self.select_performances_by_dates_stmt.consistency_level = ConsistencyLevel.TWO
+            else:
+                self.select_performances_by_dates_stmt.consistency_level = ConsistencyLevel.ONE
+
             self.insert_performance_seat_stmt = self.session.prepare("INSERT INTO performance_seats (performance_id, seat_number, title, start_date, taken_by) VALUES (?,?,?,?,?);")
             # batch ONE
 
