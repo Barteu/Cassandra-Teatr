@@ -22,10 +22,3 @@ def validate_date(date_text):
       except ValueError:
           return False
 
-
-# def get_various_titles(title):
-#   titles = [title]
-#   titles.append(title.lower())
-#   titles.append(title.upper())
-#   titles.append(title.title())
-#   return titles

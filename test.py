@@ -2,7 +2,6 @@ from cassandra.cluster import Cluster
 from database import Database
 import datetime as dt
 import uuid
-#from utils import get_various_titles
 
 if __name__ == "__main__": 
     
@@ -29,6 +28,7 @@ if __name__ == "__main__":
     db.insert_performance_seats_batch(p_uuid, [x for x in range(1,51)], ['Little Red Riding Hood'.lower()],[dt.datetime.strptime('2023-01-16 12:00', '%Y-%m-%d %H:%M')],[None])
 
     db.update_performance_seat_take_seat(p_uuid, 4, 'john.doe@email.com')
+
 
 #    db.update_performance_seat_take_seat(p_uuid, 4, 'cezary@theatre.com')
 

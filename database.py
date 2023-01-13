@@ -7,7 +7,7 @@ import time
 class Database():
         
     def __init__(self, addresses=['0.0.0.0'], port=9042):
-        self.cluster = Cluster(addresses, port)
+        self.cluster = Cluster(addresses, port, connect_timeout=120)
         try:
             self.session = self.cluster.connect('theatre', wait_for_all_pools=True)
             self.session.execute('USE Theatre')
@@ -42,7 +42,7 @@ class Database():
 
     def prepare_statements(self):
         try:
-            self.insert_performance_stmt = self.session.prepare("INSERT INTO performances (p_date, start_date, title, end_date, performance_id) VALUES (?, ?,?,?,?) IF NOT EXISTS")
+            self.insert_performance_stmt = self.session.prepare("INSERT INTO performances (p_date, start_date, title, end_date, performance_id) VALUES (?, ?,?,?,?) IF NOT EXISTS;")
             self.insert_user_stmt =  self.session.prepare("INSERT INTO users (email, first_name, last_name) VALUES (?,?,?);")
             self.select_email_stmt = self.session.prepare("SELECT email from users WHERE email=?;")
             self.select_user_stmt = self.session.prepare("SELECT * from users WHERE email=?;")
@@ -147,6 +147,39 @@ class Database():
         except Exception as e:
             print("Could not batch insert performance seats. ", e)
         return False
+
+
+    # def insert_performance_and_seats_batch(self, performance_id, p_date,title, start_date, end_date, seat_numbers):
+    #     try:
+    #         batch = BatchStatement(consistency_level=ConsistencyLevel.ONE)
+    #         batch.add(self.insert_performance_stmt,[p_date, start_date,title, end_date, performance_id])
+
+    #         batch.add(self.insert_performance_seat_stmt,[performance_id, 
+    #                                         seat_numbers[0], 
+    #                                         title,
+    #                                         start_date,
+    #                                         None])
+
+    #         for s_number in seat_numbers[1:]:
+    #             batch.add(self.insert_performance_seat_stmt,[performance_id, 
+    #                                                         s_number, 
+    #                                                         None,
+    #                                                         None,
+    #                                                         None])
+
+    #         result = self.session.execute(batch)
+
+    #         object_methods = [method_name for method_name in dir(result)
+    #               if callable(getattr(result, method_name))]
+    #         print(object_methods)
+
+    #         if result.next().applied():
+    #             return True
+
+    #     except Exception as e:
+    #         print("Could not insert performance. ", e)
+    #     return False
+
 
     def select_performances_by_dates(self, dates):
         rows = []

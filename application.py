@@ -1,5 +1,5 @@
 import os
-from utils import validate_email, validate_date_time, validate_date #,  get_various_titles
+from utils import validate_email, validate_date_time, validate_date
 import uuid
 import datetime as dt
 
@@ -121,13 +121,25 @@ class Application:
 
         for i in range(occurences):
             performance_id = uuid.uuid1()
-            self.db.insert_performance(title, 
-                                       start_dates[i],
-                                       end_dates[i],
-                                       performance_id)
+      
+            p_date = start_dates[i].date()
+
+            # correct = self.db.insert_performance_and_seats_batch(performance_id, p_date,title, start_dates[i], end_dates[i], seat_numbers= [x for x in range(1,51)] )
+            # if not correct:
+            #     self.message='Performance(s) has not been added.'
+            #     return False
+
+            correct = self.db.insert_performance(p_date,
+                                                start_dates[i], 
+                                                title,       
+                                                end_dates[i],
+                                                performance_id)
+            if not correct:
+                self.message='Performance(s) has not been added.'
+                return False
 
             self.db.insert_performance_seats_batch(performance_id, [x for x in range(1,51)], [title],[start_dates[i]],[None])
-
+        
         self.message='Performance(s) has been added.'
 
     def search_performance(self):
@@ -230,13 +242,13 @@ class Application:
             if performance_seat.taken_by != None:
                 str_to_print =  str_to_print + 'XX '
             else:
-                str_to_print = str_to_print + str(performance_seat.seat_number) + ' '
+                str_to_print = str_to_print + f'{str(performance_seat.seat_number):<2}' + ' '
             if performance_seat.seat_number%10 == 0:
                 str_to_print = str_to_print + '\n'
         print(str_to_print)
         wanna_buy_ticket = input('Would you like to buy a ticket? [Y - yes / N - no]: ')
 
-        if wanna_buy_ticket == 'Y':
+        if wanna_buy_ticket.upper() == 'Y':
             self.buy_tickets(performance_id)
 
         input('Press any key to continue..')
