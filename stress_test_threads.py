@@ -10,13 +10,13 @@ import uuid
 from reload_db import drop_schema, create_schema
 
 # number of threads
-N_WORKERS = 1
+N_WORKERS = 10
 
 # number of users (test scenario repeats)
-N_USERS = 1
+N_USERS = 20
 
 # number of performances each user creates
-N_PERFORMANCES = 10
+N_PERFORMANCES = 50
 
 # number of tickets purchased by each user for each created performance (the number is then multiplied by 3) (max=10)
 N_BUY_TICKETS_X3 = 10
@@ -63,10 +63,12 @@ def buy_tickets(db,data):
     # two tickets
     # id
     # seats [p_date, uuid, seat_num]
+    a = 0
     for i,seat in enumerate(data['seats']):
         result = db.update_performance_seat_take_seat_batch(seat[1], [seat[2],seat[2]+1], f'email{data["id"]}@email.com')
         if result:
             db.insert_user_ticket_batch(f'email{data["id"]}@email.com', seat[1],  [seat[2],seat[2]+1], [f'FirstName{data["id"]}',f'FirstName{data["id"]}-2'], [f'LastName{data["id"]}',f'LastName{data["id"]}-2'])
+        a+=1
 
 
 
@@ -155,7 +157,7 @@ def shuffle_data_tickets(data):
         d.pop('end_dates', None)
         d.pop('title', None)
         for i,p_date in enumerate(d['p_dates']):
-            for j in range(N_BUY_TICKETS_X3*2):
+            for j in range(N_BUY_TICKETS_X3):
                 data_2[n%len(data_2)]['seats'].append([p_date,d['uuids'][i],(j%10)*2+20])
                 n+=1
     return data_2
