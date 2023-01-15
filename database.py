@@ -1,18 +1,35 @@
-from cassandra.cluster import Cluster
+from cassandra.cluster import Cluster, ExecutionProfile, EXEC_PROFILE_DEFAULT
 from cassandra.cqlengine.query import BatchStatement
-from cassandra import ConsistencyLevel
+from cassandra import ConsistencyLevel, Timeout
 
 import time
 
 class Database():
 
-    def __init__(self, addresses=['0.0.0.0'], port=9042, timeout=10):
-        self.cluster = Cluster(addresses, port, connect_timeout=120)
+    def __init__(self, addresses=['0.0.0.0'], port=9042, timeout=10, connect_timeout=120):
+
+        # repeat query execution max num times if timeout occurs. MIN=1
+        self.NUM_REPEAT_ON_TIMEOUT = 6
+
+        defaullt_profile = ExecutionProfile(
+            request_timeout = timeout
+        )
+        profile_quorum_long = ExecutionProfile(
+            request_timeout = timeout*32,
+            consistency_level=ConsistencyLevel.QUORUM
+        )
+        self.cluster = Cluster(addresses, 
+                               port, 
+                               connect_timeout=connect_timeout,
+                               execution_profiles={**{f'profile{j}':ExecutionProfile(request_timeout = timeout*(2**j)) 
+                                                   for j in [i for i in range(self.NUM_REPEAT_ON_TIMEOUT)]}, 
+                                                   EXEC_PROFILE_DEFAULT: defaullt_profile,
+                                                   'profile_quorum_long':profile_quorum_long
+                                                   }
+                               )
         self.addresses = addresses
         try:
             self.session = self.cluster.connect('theatre', wait_for_all_pools=True)
-            self.session.request_timeout = timeout
-            self.session.default_timeout = timeout
             self.session.execute('USE Theatre')
         except Exception as e:
             print("Could not connect to the cluster. ", e)
@@ -55,12 +72,7 @@ class Database():
             self.select_user_stmt.consistency_level = ConsistencyLevel.ONE
 
             self.select_performances_by_dates_stmt = self.session.prepare("SELECT * FROM performances where p_date in ?;")
-            if len(self.addresses)>2:
-                self.select_performances_by_dates_stmt.consistency_level = ConsistencyLevel.THREE
-            elif len(self.addresses)==2:
-                self.select_performances_by_dates_stmt.consistency_level = ConsistencyLevel.TWO
-            else:
-                self.select_performances_by_dates_stmt.consistency_level = ConsistencyLevel.ONE
+            self.select_performances_by_dates_stmt.consistency_level = ConsistencyLevel.QUORUM
 
             self.insert_performance_seat_stmt = self.session.prepare("INSERT INTO performance_seats (performance_id, seat_number, title, start_date, taken_by) VALUES (?,?,?,?,?);")
             # batch ONE
@@ -75,9 +87,8 @@ class Database():
             # unused 
             self.update_performance_seat_free_seat_stmt = self.session.prepare("UPDATE performance_seats SET taken_by=null where performance_id=? and seat_number=?;")
             
-
             self.select_performance_seats_stmt = self.session.prepare("SELECT * FROM performance_seats where performance_id=?;")
-            self.select_performance_seats_stmt = ConsistencyLevel.QUORUM
+            self.select_performance_seats_stmt.consistency_level = ConsistencyLevel.QUORUM
 
             self.select_performance_seat_performance_info_stmt = self.session.prepare("SELECT title, start_date FROM performance_seats where performance_id=? and seat_number=1;")
             self.select_performance_seat_performance_info_stmt.consistency_level = ConsistencyLevel.ONE
@@ -89,7 +100,7 @@ class Database():
     def select_all_performances(self):
         rows = []
         try:
-            rows = self.session.execute('SELECT * FROM performances;') 
+            rows = self.session.execute('SELECT * FROM performances;', execution_profile='profile_quorum_long') 
         except Exception as e:
             print(e)
         return rows
@@ -97,7 +108,7 @@ class Database():
     def select_all_performance_seats(self):
         rows = []
         try:
-            rows = self.session.execute('SELECT * FROM performance_seats;')
+            rows = self.session.execute('SELECT * FROM performance_seats;', execution_profile='profile_quorum_long')
         except Exception as e:
             print(e)
         return rows
@@ -105,7 +116,7 @@ class Database():
     def select_all_tickets(self):
         rows = []
         try:
-            rows = self.session.execute('SELECT * FROM tickets;')
+            rows = self.session.execute('SELECT * FROM tickets;', execution_profile='profile_quorum_long')
         except Exception as e:
             print(e)
         return rows
@@ -113,12 +124,43 @@ class Database():
     def select_all_users(self):
         rows = []
         try:
-            rows = self.session.execute('SELECT * FROM users;')
+            rows = self.session.execute('SELECT * FROM users;', execution_profile='profile_quorum_long')
             return rows
         except Exception as e:
             print(e)
         return rows
 
+    def count_performances(self):
+        try:
+            result = self.session.execute('SELECT count(*) FROM performances;', execution_profile='profile_quorum_long') 
+            return result.one().count
+        except Exception as e:
+            print(e)
+        return -1
+
+    def count_performance_seats(self):
+        try:
+            result = self.session.execute('SELECT count(*) FROM performance_seats;', execution_profile='profile_quorum_long')
+            return result.one().count
+        except Exception as e:
+            print(e)
+        return -1
+
+    def count_tickets(self):
+        try:
+            result = self.session.execute('SELECT count(*) FROM tickets;', execution_profile='profile_quorum_long')
+            return result.one().count
+        except Exception as e:
+            print(e)
+        return -1
+
+    def count_users(self):
+        try:
+            result = self.session.execute('SELECT count(*) FROM users;', execution_profile='profile_quorum_long')
+            return result.one().count
+        except Exception as e:
+            print(e)
+        return -1
 
     def select_user(self, email):
         try:
@@ -160,18 +202,24 @@ class Database():
         return False
 
     def insert_performance_seats_batch(self, performance_id, seat_numbers, titles, start_dates, taken_by):
-        try:
-            batch = BatchStatement(consistency_level=ConsistencyLevel.ONE)
-            for i in range(len(seat_numbers)):
-                 batch.add(self.insert_performance_seat_stmt,[performance_id, 
-                                                              seat_numbers[i], 
-                                                              titles[i] if len(titles)>i else None,
-                                                              start_dates[i] if len(start_dates)>i else None,
-                                                              taken_by[i] if len(taken_by)>i else None])
-            self.session.execute(batch)
-            return True
-        except Exception as e:
-            print("Could not batch insert performance seats. ", e)
+ 
+        for try_num in range(self.NUM_REPEAT_ON_TIMEOUT):
+            try:
+                batch = BatchStatement(consistency_level=ConsistencyLevel.ONE)
+                for i in range(len(seat_numbers)):
+                    batch.add(self.insert_performance_seat_stmt,[performance_id, 
+                                                                seat_numbers[i], 
+                                                                titles[i] if len(titles)>i else None,
+                                                                start_dates[i] if len(start_dates)>i else None,
+                                                                taken_by[i] if len(taken_by)>i else None])
+                self.session.execute(batch, execution_profile=f'profile{try_num}')
+                return True
+            except Timeout as timeout_e:
+                print("Timeout exception occurs. ", timeout_e)
+            except Exception as e:
+                print("Could not batch insert performance seats. ", e)
+               
+
         return False
 
     def select_performances_by_dates(self, dates):
@@ -201,16 +249,20 @@ class Database():
         return False
 
     def insert_user_ticket_batch(self, email, performance_id, seat_numbers, first_names, last_names):
-        try:
-            batch = BatchStatement()
-            for i, seat_number in enumerate(seat_numbers):
-                batch.add(self.insert_user_ticket_stmt,[email, performance_id, seat_number, first_names[i], last_names[i]])
-            result = self.session.execute(batch)
-            if result.one().applied:
-                return True
-            print("Could not insert user tickets.")
-        except Exception as e:
-            print("Could not insert user tickets.", e)
+        for try_num in range(self.NUM_REPEAT_ON_TIMEOUT):
+            try:
+                batch = BatchStatement()
+                for i, seat_number in enumerate(seat_numbers):
+                    batch.add(self.insert_user_ticket_stmt,[email, performance_id, seat_number, first_names[i], last_names[i]])
+                result = self.session.execute(batch, execution_profile=f'profile{try_num}')
+                if result.one().applied:
+                    return True
+                print("Could not insert user tickets.")
+            except Timeout as timeout_e:
+                print("Timeout exception occurs. ", timeout_e)
+            except Exception as e:
+                print("Could not insert user tickets.", e)
+
         return False
 
     def update_performance_seat_take_seat(self, performance_id, seat_number, email):
