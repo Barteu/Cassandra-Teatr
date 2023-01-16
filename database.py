@@ -1,15 +1,14 @@
 from cassandra.cluster import Cluster, ExecutionProfile, EXEC_PROFILE_DEFAULT
 from cassandra.cqlengine.query import BatchStatement
 from cassandra import ConsistencyLevel, Timeout
-
 import time
 
 class Database():
 
     def __init__(self, addresses=['0.0.0.0'], port=9042, timeout=10, connect_timeout=120):
 
-        # repeat query execution max num times if timeout occurs. MIN=1
-        self.NUM_REPEAT_ON_TIMEOUT = 6
+        # Repeat query execution max num times if timeout occurs. Each repeat doubles timeout.  MIN=1
+        self.NUM_EXTENDED_TIMEOUT = 6
 
         defaullt_profile = ExecutionProfile(
             request_timeout = timeout
@@ -22,7 +21,7 @@ class Database():
                                port, 
                                connect_timeout=connect_timeout,
                                execution_profiles={**{f'profile{j}':ExecutionProfile(request_timeout = timeout*(2**j)) 
-                                                   for j in [i for i in range(self.NUM_REPEAT_ON_TIMEOUT)]}, 
+                                                   for j in [i for i in range(self.NUM_EXTENDED_TIMEOUT)]}, 
                                                    EXEC_PROFILE_DEFAULT: defaullt_profile,
                                                    'profile_quorum_long':profile_quorum_long
                                                    }
@@ -41,7 +40,6 @@ class Database():
         self.select_user_stmt = None
         self.insert_performance_seat_stmt = None
         self.select_performances_by_dates_stmt = None
-        self.select_performances_by_dates_and_title_stmt = None
         self.select_user_tickets_stmt = None
         self.insert_user_ticket_stmt = None
         self.update_performance_seat_take_seat_stmt = None
@@ -203,7 +201,7 @@ class Database():
 
     def insert_performance_seats_batch(self, performance_id, seat_numbers, titles, start_dates, taken_by):
  
-        for try_num in range(self.NUM_REPEAT_ON_TIMEOUT):
+        for try_num in range(self.NUM_EXTENDED_TIMEOUT):
             try:
                 batch = BatchStatement(consistency_level=ConsistencyLevel.ONE)
                 for i in range(len(seat_numbers)):
@@ -222,10 +220,13 @@ class Database():
 
         return False
 
-    def select_performances_by_dates(self, dates):
+    def select_performances_by_dates(self, dates, is_timeout_extended = False):
         rows = []
         try:
-            rows = self.session.execute(self.select_performances_by_dates_stmt,[dates])
+            if is_timeout_extended:
+                rows = self.session.execute(self.select_performances_by_dates_stmt,[dates], execution_profile=f'profile{int(self.NUM_EXTENDED_TIMEOUT/2)}')
+            else:
+                rows = self.session.execute(self.select_performances_by_dates_stmt,[dates])
         except Exception as e:
             print(e)
         return rows
@@ -249,7 +250,7 @@ class Database():
         return False
 
     def insert_user_ticket_batch(self, email, performance_id, seat_numbers, first_names, last_names):
-        for try_num in range(self.NUM_REPEAT_ON_TIMEOUT):
+        for try_num in range(self.NUM_EXTENDED_TIMEOUT):
             try:
                 batch = BatchStatement()
                 for i, seat_number in enumerate(seat_numbers):
@@ -302,10 +303,13 @@ class Database():
             print("Could not update performance seat (free).", e)
         return False
     
-    def select_performance_seats(self, performance_id):
+    def select_performance_seats(self, performance_id, is_timeout_extended = False):
         rows = []
         try:
-            rows = self.session.execute(self.select_performance_seats_stmt, [performance_id])
+            if is_timeout_extended:
+                rows = self.session.execute(self.select_performance_seats_stmt, [performance_id], execution_profile=f'profile{int(self.NUM_EXTENDED_TIMEOUT/2)}')
+            else:
+                rows = self.session.execute(self.select_performance_seats_stmt, [performance_id])
         except Exception as e:
             print(e)
         return rows

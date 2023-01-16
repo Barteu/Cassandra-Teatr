@@ -135,8 +135,17 @@ class Application:
                                                 end_dates[i],
                                                 performance_id)
             if not correct:
-                self.message='Performance(s) has not been added.'
-                return False
+                # check if performance is inserted ( aybe has been inserted but timeout occurs)
+                performances = self.db.select_performances_by_dates([p_date], is_timeout_extended=True)
+                success = False
+                for perf in performances:
+                    if perf.performance_id == performance_id:
+                        success=True
+                        break
+                
+                if success is False:
+                    self.message='Performance(s) has not been added.'
+                    return False
 
             self.db.insert_performance_seats_batch(performance_id, [x for x in range(1,51)], [title],[start_dates[i]],[None])
         
@@ -190,12 +199,20 @@ class Application:
             last_names.append(input(f'Enter last name of the ticket (seat {seat_number}) owner: '))
 
 
-        sucess = self.db.update_performance_seat_take_seat_batch(performance_id, seat_numbers, self.user_email)
-            
-        if sucess:
+        success = self.db.update_performance_seat_take_seat_batch(performance_id, seat_numbers, self.user_email)
+        if not success:
+            seats = self.db.select_performance_seats(performance_id, is_timeout_extended=True)
+            seats_taken = 0
+            for seat in seats:
+                if seat.seat_number in seat_numbers and seat.taken_by == self.user_email:
+                    seats_taken+=1
+            if seats_taken==len(seat_numbers):
+                success = True
+        
+        if success:
             result = self.db.insert_user_ticket_batch(self.user_email, performance_id, seat_numbers, first_names, last_names)
             if result:
-                self.message = 'Bought tickets'
+                self.message = 'Tickets have been bought'
             else:
                 self.message = 'Could not buy tickets, contact support'
  

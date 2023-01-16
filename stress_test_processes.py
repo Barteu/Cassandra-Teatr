@@ -9,14 +9,14 @@ import math
 import uuid
 from reload_db import drop_schema, create_schema
 
-# number of threads
-N_WORKERS = 1
+# number of processes
+N_WORKERS = 500
 
 # number of users (test scenario repeats)
-N_USERS = 1
+N_USERS = 1000
 
 # number of performances each user creates
-N_PERFORMANCES = 10
+N_PERFORMANCES = 2
 
 # number of tickets purchased by each user for each created performance (the number is then multiplied by 3) (max=10)
 N_BUY_TICKETS_X3 = 10
@@ -49,21 +49,50 @@ def buy_ticket(db,data, shift=0):
     for i,p_date in enumerate(data['p_dates']):
         performances = db.select_performances_by_dates([p_date])
 
-        result = db.update_performance_seat_take_seat_batch(performances[i%10].performance_id, [i%10+shift+1], f'email{data["id"]}@email.com')
-        if result:
-            db.insert_user_ticket_batch(f'email{data["id"]}@email.com', performances[i%10].performance_id, [i%10+shift+1], [f'FirstName{data["id"]}'], [f'LastName{data["id"]}'])
+        performance_id = performances[i%10].performance_id
+        seat_number =  i%10+shift+1
+        user_email =  f'email{data["id"]}@email.com'
+        
+        success = db.update_performance_seat_take_seat_batch(performance_id,[seat_number],user_email)
+
+        if not success:
+            seats = db.select_performance_seats(performance_id, is_timeout_extended=True)
+            for seat in seats:
+                if seat.seat_number==seat_number and seat.taken_by == user_email:
+                    success = True
+                    break
+
+        if success:
+            db.insert_user_ticket_batch(user_email,performance_id, [seat_number], [f'FirstName{data["id"]}'], [f'LastName{data["id"]}'])
 
 def buy_tickets(db,data):
-    # two tickets
-    # id
-    # seats [p_date, uuid, seat_num]
-    a = 0
-    for i,seat in enumerate(data['seats']):
-        result = db.update_performance_seat_take_seat_batch(seat[1], [seat[2],seat[2]+1], f'email{data["id"]}@email.com')
-        if result:
-            db.insert_user_ticket_batch(f'email{data["id"]}@email.com', seat[1],  [seat[2],seat[2]+1], [f'FirstName{data["id"]}',f'FirstName{data["id"]}-2'], [f'LastName{data["id"]}',f'LastName{data["id"]}-2'])
-        a+=1
+    # ugly solution
+    """
+    two tickets
 
+    data keys:
+        id
+        seats [p_date, uuid, seat_num]
+    """
+
+    for seat in data['seats']:
+        performance_id = seat[1]
+        seats_num = [seat[2],seat[2]+1]
+        user_email = f'email{data["id"]}@email.com'
+        success = db.update_performance_seat_take_seat_batch(performance_id, seats_num, user_email)
+
+        if not success:
+            seats = db.select_performance_seats(performance_id, is_timeout_extended=True)
+            seats_taken = 0
+            for seat in seats:
+                if seat.seat_number in seats_num and seat.taken_by == user_email:
+                    seats_taken+=1
+            if seats_taken==2:
+                success = True
+
+        if success:
+            db.insert_user_ticket_batch(user_email, seat[1],  [seat[2],seat[2]+1], [f'FirstName{data["id"]}',f'FirstName{data["id"]}-2'], [f'LastName{data["id"]}',f'LastName{data["id"]}-2'])
+   
 
 
 def get_user_tickets(db,data):
@@ -77,7 +106,7 @@ def jobs(data):
     add_performance(db, data)
     get_programme(db,data)
     for s in range(N_BUY_TICKETS_X3):
-        buy_tickets(db,data,shift=s)
+        buy_ticket(db,data,shift=s)
     get_user_tickets(db,data)
 
 def jobs_tickets(data):
@@ -165,9 +194,10 @@ print(f"Testing..")
 start_time_1 = time.time()
 run_with_processes(n_workers=N_WORKERS, data=data)
 duration_1 = time.time() - start_time_1
-print(f"Stage 1 Finished in {duration_1:.2f} seconds with {N_WORKERS} processes.")
+print(f"\nStage 1 (all operations) Finished in {duration_1:.2f} seconds with {N_WORKERS} processes.")
 
 data_2 = shuffle_data_tickets(data)
+data.clear()
 
 start_time_2 = time.time()
 print(f"Testing stage 2 (tickets)..")
