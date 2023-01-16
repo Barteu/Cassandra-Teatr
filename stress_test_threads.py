@@ -21,6 +21,9 @@ N_PERFORMANCES = 10
 # how many tickets should be purchased for each performance multiplied by 10 (from 1 to 10)
 N_BUY_TICKETS_X10 = 10
 
+
+N_DB_CONNECT_ATTEMPTS = 5
+
 thread_local = threading.local()
 
 f = open("contact_points.txt", "r")
@@ -28,12 +31,14 @@ CONTACT_POINTS = [cp for cp in f.read().splitlines()]
 
 SEATS = [x for x in range(1,101)]
 def get_db():
-    try:
-        if not hasattr(thread_local, "db"):
-            thread_local.db =  Database(CONTACT_POINTS)
-        return thread_local.db  
-    except Exception as e:
-        print(e)
+    for i in range(N_DB_CONNECT_ATTEMPTS):
+        try:
+            if not hasattr(thread_local, "db"):
+                thread_local.db =  Database(CONTACT_POINTS)
+                return thread_local.db  
+            return thread_local.db  
+        except Exception as e:
+            pass
 
 def create_account(db, data):
     db.insert_user(f'email{data["id"]}@email.com', f'FirstName{data["id"]}', f'LastName{data["id"]}')
@@ -68,8 +73,18 @@ def buy_tickets(db,data):
         seats [p_date, uuid, seat_num]
     """
 
+       
     for seat in data['seats']:
         performance_id = seat[1]
+        performances = db.select_performances_by_dates([seat[0]])
+        performance_exists = False
+        for perf in performances:
+            if perf.performance_id == performance_id:
+                performance_exists = True
+                break
+        if performance_exists is False:
+            continue
+
         seats_num = [seat[2],seat[2]+1]
         user_email = f'email{data["id"]}@email.com'
         success = db.update_performance_seat_take_seat_batch(performance_id, seats_num, user_email)

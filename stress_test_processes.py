@@ -10,10 +10,10 @@ import uuid
 from reload_db import drop_schema, create_schema
 
 # number of processes
-N_WORKERS = 1
+N_WORKERS = 500
 
 # number of users (test scenario repeats)
-N_USERS = 1
+N_USERS = 500
 
 # number of performances each user creates
 N_PERFORMANCES = 10
@@ -21,7 +21,7 @@ N_PERFORMANCES = 10
 # how many tickets should be purchased for each performance multiplied by 10 (from 1 to 10)
 N_BUY_TICKETS_X10 = 10
 
-
+N_DB_CONNECT_ATTEMPTS = 5
 
 f = open("contact_points.txt", "r")
 CONTACT_POINTS = [cp for cp in f.read().splitlines()]
@@ -64,6 +64,16 @@ def buy_tickets(db,data):
 
     for seat in data['seats']:
         performance_id = seat[1]
+        performances = db.select_performances_by_dates([seat[0]])
+        performance_exists = False
+        for perf in performances:
+            
+            if perf.performance_id == performance_id:
+                performance_exists = True
+                break
+        if performance_exists is False:
+            continue
+       
         seats_num = [seat[2],seat[2]+1]
         user_email = f'email{data["id"]}@email.com'
         success = db.update_performance_seat_take_seat_batch(performance_id, seats_num, user_email)
@@ -86,17 +96,29 @@ def get_user_tickets(db,data):
     db.select_user_tickets(f'email{data["id"]}@email.com')
 
 def jobs(data):
-    db = Database(CONTACT_POINTS)
-
+    for i in range(N_DB_CONNECT_ATTEMPTS):
+        try:
+            db = Database(CONTACT_POINTS)
+            break
+        except Exception as e:
+            pass
+        
     create_account(db, data)
     log_in(db, data)
     add_performance(db, data)
     get_programme(db,data)
+    db.finalize()
 
 def jobs_tickets(data):
-    db = Database(CONTACT_POINTS)
+    for i in range(N_DB_CONNECT_ATTEMPTS):
+        try:
+            db = Database(CONTACT_POINTS)
+            break
+        except Exception as e:
+            pass
     # buy tickets 
     buy_tickets(db,data)
+    db.finalize()
 
 def test_jobs_tickets_one_thread(data):
     db = Database(CONTACT_POINTS)
@@ -153,9 +175,6 @@ def shuffle_data_tickets(data):
     data_2 =  [ {**dict(id=i), 'seats':[] } for i in range(N_USERS-1, -1, -1)]
     n=0
     for d in data:
-        d.pop('start_dates', None)
-        d.pop('end_dates', None)
-        d.pop('title', None)
         for i,p_date in enumerate(d['p_dates']):
             for j in range(N_BUY_TICKETS_X10*5):
                 data_2[n%len(data_2)]['seats'].append([p_date,d['uuids'][i],((j)*2)+1])
