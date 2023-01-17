@@ -2,10 +2,14 @@ from cassandra.cluster import Cluster, ExecutionProfile, EXEC_PROFILE_DEFAULT
 from cassandra.cqlengine.query import BatchStatement
 from cassandra import ConsistencyLevel, Timeout
 import time
+import sys, os
 
 class Database():
 
-    def __init__(self, addresses=['0.0.0.0'], port=9042, timeout=10, connect_timeout=120):
+    def __init__(self, addresses=['0.0.0.0'], disable_prints = False, port=9042, timeout=10, connect_timeout=120):
+        
+        if disable_prints:
+            sys.stdout = open(os.devnull, 'w')
 
         # Repeat query execution max num times if timeout occurs. Each repeat doubles timeout.  MIN=1
         self.NUM_EXTENDED_TIMEOUT = 6
@@ -52,13 +56,15 @@ class Database():
     def finalize(self):
         try:
             self.cluster.shutdown()
+            sys.stdout = sys.__stdout__
         except Exception as e:
             print("Could not close existing cluster. ", e)
             raise e
 
     def prepare_statements(self):
         try:
-            self.insert_performance_stmt = self.session.prepare("INSERT INTO performances (p_date, start_date, title, end_date, performance_id) VALUES (?, ?,?,?,?) IF NOT EXISTS;")
+            self.insert_performance_stmt = self.session.prepare("INSERT INTO performances (p_date, start_date, title, end_date, performance_id) VALUES (?, ?,?,?,?);")
+            self.insert_performance_stmt.consistency_level = ConsistencyLevel.ONE
             
             self.insert_user_stmt =  self.session.prepare("INSERT INTO users (email, first_name, last_name) VALUES (?,?,?);")
             self.insert_user_stmt.consistency_level = ConsistencyLevel.ONE
@@ -73,12 +79,21 @@ class Database():
             self.select_performances_by_dates_stmt.consistency_level = ConsistencyLevel.QUORUM
 
             self.insert_performance_seat_stmt = self.session.prepare("INSERT INTO performance_seats (performance_id, seat_number, title, start_date, taken_by) VALUES (?,?,?,?,?);")
-            # batch ONE
+            self.insert_performance_seat_stmt.consistency_level = ConsistencyLevel.QUORUM
+
+            self.select_taken_by_from_performance_seats_stmt = self.session.prepare("SELECT taken_by, writetime(taken_by) from performance_seats where performance_id=? and seat_number = ?;")
+            self.select_taken_by_from_performance_seats_stmt.consistency_level = ConsistencyLevel.QUORUM
+
+            self.delete_performance_seat_stmt = self.session.prepare("DELETE FROM performance_seats where performance_id=? and seat_number=? and taken_by=?;")
+            self.delete_performance_seat_stmt.consistency_level = ConsistencyLevel.QUORUM
+            
+            self.delete_ticket_stmt = self.session.prepare("DELETE FROM tickets where email=? and buy_timestamp=? and performance_id=? and seat_number=?")
+            self.delete_ticket_stmt.consistency_level = ConsistencyLevel.QUORUM
 
             self.select_user_tickets_stmt = self.session.prepare("SELECT performance_id, seat_number, first_name, last_name from tickets WHERE email=?;")
             self.select_user_tickets_stmt.consistency_level = ConsistencyLevel.QUORUM
 
-            self.insert_user_ticket_stmt = self.session.prepare("INSERT INTO tickets (email, performance_id, seat_number, first_name, last_name) VALUES (?,?,?,?,?) IF NOT EXISTS;")
+            self.insert_user_ticket_stmt = self.session.prepare("INSERT INTO tickets (email, buy_timestamp, performance_id, seat_number, first_name, last_name) VALUES (?,?,?,?,?,?);")
             
             self.update_performance_seat_take_seat_stmt = self.session.prepare("UPDATE performance_seats SET taken_by=? where performance_id=? and seat_number=? IF taken_by=null;")
           
@@ -216,8 +231,7 @@ class Database():
                 print("Timeout exception occurs. ", timeout_e)
             except Exception as e:
                 print("Could not batch insert performance seats. ", e)
-               
-
+              
         return False
 
     def select_performances_by_dates(self, dates, is_timeout_extended = False):
@@ -239,9 +253,9 @@ class Database():
             print(e)
         return rows
 
-    def insert_user_ticket(self, email, performance_id, seat_number, first_name, last_name):
+    def insert_user_ticket(self, email, buy_timestamp, performance_id, seat_number, first_name, last_name):
         try:
-            result = self.session.execute(self.insert_user_ticket_stmt,[email, performance_id, seat_number, first_name, last_name])
+            result = self.session.execute(self.insert_user_ticket_stmt,[email, buy_timestamp, performance_id, seat_number, first_name, last_name])
             if result.next().applied():
                 return True
             print("Could not insert user ticket.")
@@ -249,12 +263,12 @@ class Database():
             print("Could not insert user ticket.", e)
         return False
 
-    def insert_user_ticket_batch(self, email, performance_id, seat_numbers, first_names, last_names):
+    def insert_user_ticket_batch(self, email, buy_timestamp, performance_id, seat_numbers, first_names, last_names):
         for try_num in range(self.NUM_EXTENDED_TIMEOUT):
             try:
                 batch = BatchStatement()
                 for i, seat_number in enumerate(seat_numbers):
-                    batch.add(self.insert_user_ticket_stmt,[email, performance_id, seat_number, first_names[i], last_names[i]])
+                    batch.add(self.insert_user_ticket_stmt,[email, buy_timestamp, performance_id, seat_number, first_names[i], last_names[i]])
                 result = self.session.execute(batch, execution_profile=f'profile{try_num}')
                 if result.one().applied:
                     return True

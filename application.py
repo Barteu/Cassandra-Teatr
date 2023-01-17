@@ -124,32 +124,26 @@ class Application:
       
             p_date = start_dates[i].date()
 
-            # correct = self.db.insert_performance_and_seats_batch(performance_id, p_date,title, start_dates[i], end_dates[i], seat_numbers= [x for x in range(1,51)] )
-            # if not correct:
-            #     self.message='Performance(s) has not been added.'
-            #     return False
-
             correct = self.db.insert_performance(p_date,
                                                 start_dates[i], 
                                                 title,       
                                                 end_dates[i],
                                                 performance_id)
             if not correct:
-                # check if performance is inserted ( aybe has been inserted but timeout occurs)
+                # check if performance is inserted ( maybe has been inserted but timeout occurs)
                 performances = self.db.select_performances_by_dates([p_date], is_timeout_extended=True)
                 success = False
                 for perf in performances:
                     if perf.performance_id == performance_id:
                         success=True
-                        break
-                
-                if success is False:
-                    self.message='Performance(s) has not been added.'
-                    return False
+                        self.message='Performance(s) has been added.'
+                        return True
+    
+                self.message='Performance(s) has not been added.'
+                return False
 
-            self.db.insert_performance_seats_batch(performance_id, [x for x in range(1,51)], [title],[start_dates[i]],[None])
-        
         self.message='Performance(s) has been added.'
+        return True
 
     def search_performance(self):
         title = input('Title (or press enter if all): ')
@@ -198,7 +192,7 @@ class Application:
             first_names.append(input(f'Enter first name of the ticket (seat {seat_number}) owner: '))
             last_names.append(input(f'Enter last name of the ticket (seat {seat_number}) owner: '))
 
-
+        buy_timestamp = dt.datetime.today()
         success = self.db.update_performance_seat_take_seat_batch(performance_id, seat_numbers, self.user_email)
         if not success:
             seats = self.db.select_performance_seats(performance_id, is_timeout_extended=True)
@@ -210,7 +204,7 @@ class Application:
                 success = True
         
         if success:
-            result = self.db.insert_user_ticket_batch(self.user_email, performance_id, seat_numbers, first_names, last_names)
+            result = self.db.insert_user_ticket_batch(self.user_email, buy_timestamp, performance_id, seat_numbers, first_names, last_names)
             if result:
                 self.message = 'Tickets have been bought'
             else:
