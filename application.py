@@ -81,7 +81,11 @@ class Application:
         self.last_performances_select = []
         for i,performance in enumerate(performances):
             print(f"{i+1}. {performance.title:<32} {performance.start_date.strftime('%Y-%m-%d %H:%M')} - {performance.end_date.strftime('%H:%M')}")
-            self.last_performances_select.append({'performance_id': performance.performance_id, 'title': performance.title, 'start_date': performance.start_date, 'end_date':performance.end_date})
+            self.last_performances_select.append({'performance_id': performance.performance_id,
+                                                'title': performance.title,
+                                                'start_date': performance.start_date,
+                                                'end_date':performance.end_date,
+                                                'number_of_seats':performance.number_of_seats})
         input('Press any key to continue..')
 
     def add_performance(self):
@@ -94,6 +98,7 @@ class Application:
         
         start_dates = []
         end_dates = []
+        numbers_of_seats = []
         
         for i in range(occurences):
             print(f'Occurence No. {i+1}')
@@ -109,6 +114,11 @@ class Application:
                 if validate_date_time(end_date) is False:
                     correct = False
                 
+                try:
+                    number_of_seats = int(input("Number of seats: "))
+                except:
+                    correct = False
+
                 if correct:
                     start_date =  dt.datetime.strptime(start_date, '%Y-%m-%d %H:%M')
                     end_date =  dt.datetime.strptime(end_date, '%Y-%m-%d %H:%M')
@@ -117,6 +127,7 @@ class Application:
                     else:
                         start_dates.append(start_date)
                         end_dates.append(end_date)
+                        numbers_of_seats.append(number_of_seats)
 
 
         for i in range(occurences):
@@ -128,7 +139,8 @@ class Application:
                                                 start_dates[i], 
                                                 title,       
                                                 end_dates[i],
-                                                performance_id)
+                                                performance_id,
+                                                numbers_of_seats[i])
             if not correct:
                 # check if performance is inserted ( maybe has been inserted but timeout occurs)
                 performances = self.db.select_performances_by_dates([p_date], is_timeout_extended=True)
@@ -169,13 +181,17 @@ class Application:
 
         for i,performance in enumerate(performances):
             print(f"{i+1}. {performance.title:<32} {performance.start_date.strftime('%Y-%m-%d %H:%M')} - {performance.end_date.strftime('%H:%M')}")
-            self.last_performances_select.append({'performance_id': performance.performance_id, 'title': performance.title, 'start_date': performance.start_date, 'end_date':performance.end_date})
+            self.last_performances_select.append({'performance_id': performance.performance_id,
+                                                'title': performance.title,
+                                                'start_date': performance.start_date,
+                                                'end_date':performance.end_date,
+                                                'number_of_seats':performance.number_of_seats})
         
 
 
         input('Press any key to continue..')
 
-    def buy_tickets(self, performance_id):
+    def buy_tickets(self, performance_id, title, start_date, number_of_seats):
         if not self.user_email:
             self.message = 'User needs to be logged in'
             return
@@ -186,6 +202,10 @@ class Application:
             return
         
         seat_numbers = [int(input(f'Enter seat number for ticket {i+1}: ')) for i in range(num_tickets)]
+        for seat in seat_numbers:
+            if seat > number_of_seats or seat < 1:
+                self.message = f"Seat number must be in range from 1 to {number_of_seats}."
+                return
         first_names = []
         last_names = []
         for seat_number in seat_numbers:
@@ -193,7 +213,7 @@ class Application:
             last_names.append(input(f'Enter last name of the ticket (seat {seat_number}) owner: '))
 
         buy_timestamp = dt.datetime.today()
-        success = self.db.update_performance_seat_take_seat_batch(performance_id, seat_numbers, self.user_email)
+        success = self.db.insert_performance_seats_batch(performance_id, seat_numbers, title, start_date, self.user_email)
         if not success:
             seats = self.db.select_performance_seats(performance_id, is_timeout_extended=True)
             seats_taken = 0
@@ -219,14 +239,29 @@ class Application:
             self.message = 'User needs to be logged in'
             input('Press any key to continue..')
             return
-        tickets = self.db.select_user_tickets(self.user_email)
+
+        start_date = input('Start date (yyyy‑mm‑dd) (or press enter if all): ')
+        end_date = input('End date (yyyy‑mm‑dd) (or press enter if all): ')
+
+        if validate_date(start_date) is False:
+            start_date = dt.datetime.min
+        else:
+            start_date = dt.datetime.strptime(start_date, '%Y-%m-%d')
+
+        if validate_date(end_date) is False:
+            end_date = dt.datetime.max
+        else:
+            end_date = dt.datetime.strptime(end_date, '%Y-%m-%d')
+
+        tickets = self.db.select_user_tickets(self.user_email, start_date, end_date)
 
         for i, ticket in enumerate(tickets):
-            ticket_info = self.db.select_performance_seat_performance_info(ticket.performance_id)
+            ticket_info = self.db.select_performance_seat_performance_info(ticket.performance_id, ticket.seat_number)
             print(f'{i+1}.')
             if ticket_info and ticket_info.title:
                 print(f'Title: {ticket_info.title}')
                 print(f"Date: {ticket_info.start_date.strftime('%Y-%m-%d %H:%M')}")
+            print(f"Bought: {ticket.buy_timestamp.strftime('%Y-%m-%d %H:%M')}")
             print(f'Seat number: {ticket.seat_number}')
             print(f'First name: {ticket.first_name}')
             print(f'Last name: {ticket.last_name}\n')
@@ -248,24 +283,27 @@ class Application:
         
         performance_id = self.last_performances_select[performance_number]['performance_id']
 
-        seats = self.db.select_performance_seats(performance_id)
+        seats_taken = self.db.select_performance_seats(performance_id)
 
+        seats = [False for i in range(self.last_performances_select[performance_number]['number_of_seats'])]
         str_to_print = ''
-
-        for performance_seat in seats:
-            if performance_seat.seat_number == 0:
-                pass
-            if performance_seat.taken_by != None:
+        for seat in seats_taken:
+            seats[seat.seat_number] = True
+        for i, taken in enumerate(seats):
+            if taken:
                 str_to_print =  str_to_print + 'XX '
             else:
-                str_to_print = str_to_print + f'{str(performance_seat.seat_number):<2}' + ' '
-            if performance_seat.seat_number%10 == 0:
+                str_to_print = str_to_print + f'{str(i+1):<2}' + ' '
+            if (i+1)%10 == 0:
                 str_to_print = str_to_print + '\n'
         print(str_to_print)
         wanna_buy_ticket = input('Would you like to buy a ticket? [Y - yes / N - no]: ')
 
         if wanna_buy_ticket.upper() == 'Y':
-            self.buy_tickets(performance_id)
+            self.buy_tickets(performance_id,
+                            self.last_performances_select[performance_number]['title'],
+                            self.last_performances_select[performance_number]['start_date'],
+                            self.last_performances_select[performance_number]['number_of_seats'])
 
     def do_action(self, action):
         switcher={

@@ -63,7 +63,7 @@ class Database():
 
     def prepare_statements(self):
         try:
-            self.insert_performance_stmt = self.session.prepare("INSERT INTO performances (p_date, start_date, title, end_date, performance_id) VALUES (?, ?,?,?,?);")
+            self.insert_performance_stmt = self.session.prepare("INSERT INTO performances (p_date, start_date, title, end_date, performance_id, number_of_seats) VALUES (?,?,?,?,?,?);")
             self.insert_performance_stmt.consistency_level = ConsistencyLevel.ONE
             
             self.insert_user_stmt =  self.session.prepare("INSERT INTO users (email, first_name, last_name) VALUES (?,?,?);")
@@ -78,32 +78,38 @@ class Database():
             self.select_performances_by_dates_stmt = self.session.prepare("SELECT * FROM performances where p_date in ?;")
             self.select_performances_by_dates_stmt.consistency_level = ConsistencyLevel.QUORUM
 
+            self.select_performances_by_all_stmt = self.session.prepare("SELECT * FROM performances where p_date=? and start_date=? and title=?;")
+            self.select_performances_by_all_stmt.consistency_level = ConsistencyLevel.QUORUM
+
             self.insert_performance_seat_stmt = self.session.prepare("INSERT INTO performance_seats (performance_id, seat_number, title, start_date, taken_by) VALUES (?,?,?,?,?);")
             self.insert_performance_seat_stmt.consistency_level = ConsistencyLevel.QUORUM
 
-            self.select_taken_by_from_performance_seats_stmt = self.session.prepare("SELECT taken_by, writetime(taken_by) from performance_seats where performance_id=? and seat_number = ?;")
+            self.select_taken_by_from_performance_seats_stmt = self.session.prepare("SELECT taken_by from performance_seats where performance_id=? and seat_number in ?;")
             self.select_taken_by_from_performance_seats_stmt.consistency_level = ConsistencyLevel.QUORUM
 
             self.delete_performance_seat_stmt = self.session.prepare("DELETE FROM performance_seats where performance_id=? and seat_number=? and taken_by=?;")
             self.delete_performance_seat_stmt.consistency_level = ConsistencyLevel.QUORUM
             
-            self.delete_ticket_stmt = self.session.prepare("DELETE FROM tickets where email=? and buy_timestamp=? and performance_id=? and seat_number=?")
-            self.delete_ticket_stmt.consistency_level = ConsistencyLevel.QUORUM
+            # self.delete_ticket_stmt = self.session.prepare("DELETE FROM tickets where email=? and buy_timestamp=? and performance_id=? and seat_number=?")
+            # self.delete_ticket_stmt.consistency_level = ConsistencyLevel.QUORUM
 
-            self.select_user_tickets_stmt = self.session.prepare("SELECT performance_id, seat_number, first_name, last_name from tickets WHERE email=?;")
+            self.select_user_tickets_stmt = self.session.prepare("SELECT performance_id, buy_timestamp, seat_number, first_name, last_name from tickets WHERE email=? and buy_timestamp>=? and buy_timestamp<=?;")
             self.select_user_tickets_stmt.consistency_level = ConsistencyLevel.QUORUM
+
+            self.select_user_tickets_check_stmt = self.session.prepare("SELECT count(*) as cnt from tickets WHERE email=? and buy_timestamp=? and performance_id=? and seat_number in ?;")
+            self.select_user_tickets_check_stmt.consistency_level = ConsistencyLevel.QUORUM
 
             self.insert_user_ticket_stmt = self.session.prepare("INSERT INTO tickets (email, buy_timestamp, performance_id, seat_number, first_name, last_name) VALUES (?,?,?,?,?,?);")
             
-            self.update_performance_seat_take_seat_stmt = self.session.prepare("UPDATE performance_seats SET taken_by=? where performance_id=? and seat_number=? IF taken_by=null;")
+            # self.update_performance_seat_take_seat_stmt = self.session.prepare("UPDATE performance_seats SET taken_by=? where performance_id=? and seat_number=?;")
           
-            # unused 
-            self.update_performance_seat_free_seat_stmt = self.session.prepare("UPDATE performance_seats SET taken_by=null where performance_id=? and seat_number=?;")
+            # # unused 
+            # self.update_performance_seat_free_seat_stmt = self.session.prepare("UPDATE performance_seats SET taken_by=null where performance_id=? and seat_number=?;")
             
             self.select_performance_seats_stmt = self.session.prepare("SELECT * FROM performance_seats where performance_id=?;")
             self.select_performance_seats_stmt.consistency_level = ConsistencyLevel.QUORUM
 
-            self.select_performance_seat_performance_info_stmt = self.session.prepare("SELECT title, start_date FROM performance_seats where performance_id=? and seat_number=1;")
+            self.select_performance_seat_performance_info_stmt = self.session.prepare("SELECT title, start_date FROM performance_seats where performance_id=? and seat_number=?;")
             self.select_performance_seat_performance_info_stmt.consistency_level = ConsistencyLevel.ONE
 
         except Exception as e:
@@ -196,36 +202,68 @@ class Database():
             print(e)
         return None
     
-    def insert_performance(self, p_date,start_date, title, end_date, uuid):
+    def insert_performance(self, p_date,start_date, title, end_date, uuid, number_of_seats):
         try:
-            result = self.session.execute(self.insert_performance_stmt,[p_date, start_date,title, end_date, uuid])
-            if result.one().applied:
+            self.session.execute(self.insert_performance_stmt,[p_date, start_date,title, end_date, uuid, number_of_seats])
+            result = self.session.execute(self.select_performances_by_all_stmt,[p_date, start_date, title])
+            if result.one():
                 return True
         except Exception as e:
             print("Could not insert performance. ", e)
         return False
 
     def insert_performance_seat(self, performance_id, seat_number, title=None, start_date=None, taken_by = None):
-        try:
-            result = self.session.execute(self.insert_performance_seat_stmt, [performance_id, seat_number, title, start_date, taken_by])
-            if result.one().applied:
+        for try_num in range(self.NUM_EXTENDED_TIMEOUT):
+            try:
+                result = self.session.execute(self.select_taken_by_from_performance_seats_stmt, [performance_id, [seat_number]])
+                if result.one():
+                    return False
+                self.session.execute(self.insert_performance_seat_stmt, [performance_id, seat_number, title, start_date, taken_by])
+                result = self.session.execute(self.select_taken_by_from_performance_seats_stmt, [performance_id, [seat_number]])
+
+                try_again = False
+                for r in result:
+                    if r.taken_by != taken_by:
+                        self.session.execute(self.delete_performance_seat_stmt, [performance_id, seat_number, taken_by])
+                        try_again = True
+                        break
+                if try_again:
+                    pass
+
                 return True
-        except Exception as e:
-            print("Could not insert performance seat. ", e)
+            except Timeout as timeout_e:
+                print("Timeout exception occurs. ", timeout_e)
+            except Exception as e:
+                print("Could not insert performance seat. ", e)
         return False
 
-    def insert_performance_seats_batch(self, performance_id, seat_numbers, titles, start_dates, taken_by):
+    def insert_performance_seats_batch(self, performance_id, seat_numbers, title, start_date, taken_by):
  
         for try_num in range(self.NUM_EXTENDED_TIMEOUT):
             try:
+                result = self.session.execute(self.select_taken_by_from_performance_seats_stmt, [performance_id, seat_numbers])
+                if result.one():
+                    return False
                 batch = BatchStatement(consistency_level=ConsistencyLevel.ONE)
                 for i in range(len(seat_numbers)):
                     batch.add(self.insert_performance_seat_stmt,[performance_id, 
                                                                 seat_numbers[i], 
-                                                                titles[i] if len(titles)>i else None,
-                                                                start_dates[i] if len(start_dates)>i else None,
-                                                                taken_by[i] if len(taken_by)>i else None])
+                                                                title,
+                                                                start_date,
+                                                                taken_by])
                 self.session.execute(batch, execution_profile=f'profile{try_num}')
+
+                result = self.session.execute(self.select_taken_by_from_performance_seats_stmt, [performance_id, seat_numbers])
+                try_again = False
+                for r in result:
+                    if r.taken_by != taken_by:
+                        for seat_number in seat_numbers:
+                            self.session.execute(self.delete_performance_seat_stmt, [performance_id, seat_number, taken_by])
+                        try_again = True
+                        break
+
+                if try_again:
+                    pass
                 return True
             except Timeout as timeout_e:
                 print("Timeout exception occurs. ", timeout_e)
@@ -245,18 +283,22 @@ class Database():
             print(e)
         return rows
 
-    def select_user_tickets(self, email):
+    def select_user_tickets(self, email, buy_timestamp_start, buy_timestamp_end):
         rows = []
         try:
-            rows = self.session.execute(self.select_user_tickets_stmt, [email])
+            rows = self.session.execute(self.select_user_tickets_stmt, [email, buy_timestamp_start, buy_timestamp_end])
         except Exception as e:
             print(e)
         return rows
 
     def insert_user_ticket(self, email, buy_timestamp, performance_id, seat_number, first_name, last_name):
         try:
-            result = self.session.execute(self.insert_user_ticket_stmt,[email, buy_timestamp, performance_id, seat_number, first_name, last_name])
-            if result.next().applied():
+            result = self.session.execute(self.select_user_tickets_check_stmt, [email, buy_timestamp, performance_id, [seat_number]])
+            if result.one().cnt != 0:
+                return True
+            self.session.execute(self.insert_user_ticket_stmt,[email, buy_timestamp, performance_id, seat_number, first_name, last_name])
+            result = self.session.execute(self.select_user_tickets_check_stmt, [email, buy_timestamp, performance_id, [seat_number]])
+            if result.one().cnt != 0:
                 return True
             print("Could not insert user ticket.")
         except Exception as e:
@@ -266,11 +308,15 @@ class Database():
     def insert_user_ticket_batch(self, email, buy_timestamp, performance_id, seat_numbers, first_names, last_names):
         for try_num in range(self.NUM_EXTENDED_TIMEOUT):
             try:
+                result = self.session.execute(self.select_user_tickets_check_stmt, [email, buy_timestamp, performance_id, seat_numbers])
+                if result.one().cnt != 0:
+                    return True
                 batch = BatchStatement()
                 for i, seat_number in enumerate(seat_numbers):
                     batch.add(self.insert_user_ticket_stmt,[email, buy_timestamp, performance_id, seat_number, first_names[i], last_names[i]])
-                result = self.session.execute(batch, execution_profile=f'profile{try_num}')
-                if result.one().applied:
+                self.session.execute(batch, execution_profile=f'profile{try_num}')
+                result = self.session.execute(self.select_user_tickets_check_stmt, [email, buy_timestamp, performance_id, seat_numbers])
+                if result.one().cnt != 0:
                     return True
                 print("Could not insert user tickets.")
             except Timeout as timeout_e:
@@ -280,42 +326,42 @@ class Database():
 
         return False
 
-    def update_performance_seat_take_seat(self, performance_id, seat_number, email):
-        try:
-            result = self.session.execute(self.update_performance_seat_take_seat_stmt,[email, performance_id, seat_number])
-            if not result.one().applied:
-                print("Could not update performance seat (take).")
-                return False
-            return True
-        except Exception as e:
-            print("Could not update performance seat (take).", e)
-        return False
+    # def update_performance_seat_take_seat(self, performance_id, seat_number, email):
+    #     try:
+    #         result = self.session.execute(self.update_performance_seat_take_seat_stmt,[email, performance_id, seat_number])
+    #         if not result.one().applied:
+    #             print("Could not update performance seat (take).")
+    #             return False
+    #         return True
+    #     except Exception as e:
+    #         print("Could not update performance seat (take).", e)
+    #     return False
 
-    def update_performance_seat_take_seat_batch(self, performance_id, seat_numbers, email):
-        try:
-            batch = BatchStatement()
-            for seat_number in seat_numbers:
-                batch.add(self.update_performance_seat_take_seat_stmt,[email, performance_id, seat_number])
-            result = self.session.execute(batch)
-            for r in result:
-                if not r.applied:
-                    print("Could not update performance seat batch(take).")
-                    return False
-            return True
-        except Exception as e:
-            print("Could not update performance seat batch(take).", e)
-        return False
+    # def update_performance_seat_take_seat_batch(self, performance_id, seat_numbers, email):
+    #     try:
+    #         batch = BatchStatement()
+    #         for seat_number in seat_numbers:
+    #             batch.add(self.update_performance_seat_take_seat_stmt,[email, performance_id, seat_number])
+    #         result = self.session.execute(batch)
+    #         for r in result:
+    #             if not r.applied:
+    #                 print("Could not update performance seat batch(take).")
+    #                 return False
+    #         return True
+    #     except Exception as e:
+    #         print("Could not update performance seat batch(take).", e)
+    #     return False
 
-    def update_performance_seat_free_seat(self, performance_id, seat_number):
-        try:
-            result = self.session.execute(self.update_performance_seat_take_seat_stmt,[performance_id, seat_number])
-            if not result:
-                print("Could not update performance seat (free).")
-                return False
-            return True
-        except Exception as e:
-            print("Could not update performance seat (free).", e)
-        return False
+    # def update_performance_seat_free_seat(self, performance_id, seat_number):
+    #     try:
+    #         result = self.session.execute(self.update_performance_seat_take_seat_stmt,[performance_id, seat_number])
+    #         if not result:
+    #             print("Could not update performance seat (free).")
+    #             return False
+    #         return True
+    #     except Exception as e:
+    #         print("Could not update performance seat (free).", e)
+    #     return False
     
     def select_performance_seats(self, performance_id, is_timeout_extended = False):
         rows = []
@@ -328,9 +374,9 @@ class Database():
             print(e)
         return rows
 
-    def select_performance_seat_performance_info(self, performance_id):
+    def select_performance_seat_performance_info(self, performance_id, seat_number):
         try:
-            row = self.session.execute(self.select_performance_seat_performance_info_stmt,[performance_id]).one()
+            row = self.session.execute(self.select_performance_seat_performance_info_stmt,[performance_id, seat_number]).one()
             if row:
                 return row
             return False
