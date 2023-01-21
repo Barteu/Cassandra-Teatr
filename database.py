@@ -32,7 +32,7 @@ class Database():
                                )
         self.addresses = addresses
         try:
-            self.session = self.cluster.connect('theatre', wait_for_all_pools=True)
+            self.session = self.cluster.connect('theatre', wait_for_all_pools=False)
             self.session.execute('USE Theatre')
         except Exception as e:
             print("Could not connect to the cluster. ", e)
@@ -89,9 +89,6 @@ class Database():
 
             self.delete_performance_seat_stmt = self.session.prepare("DELETE FROM performance_seats where performance_id=? and seat_number=? and taken_by=?;")
             self.delete_performance_seat_stmt.consistency_level = ConsistencyLevel.QUORUM
-            
-            # self.delete_ticket_stmt = self.session.prepare("DELETE FROM tickets where email=? and buy_timestamp=? and performance_id=? and seat_number=?")
-            # self.delete_ticket_stmt.consistency_level = ConsistencyLevel.QUORUM
 
             self.select_user_tickets_stmt = self.session.prepare("SELECT performance_id, buy_timestamp, seat_number, first_name, last_name from tickets WHERE email=? and buy_timestamp>=? and buy_timestamp<=?;")
             self.select_user_tickets_stmt.consistency_level = ConsistencyLevel.QUORUM
@@ -100,11 +97,6 @@ class Database():
             self.select_user_tickets_check_stmt.consistency_level = ConsistencyLevel.QUORUM
 
             self.insert_user_ticket_stmt = self.session.prepare("INSERT INTO tickets (email, buy_timestamp, performance_id, seat_number, first_name, last_name) VALUES (?,?,?,?,?,?);")
-            
-            # self.update_performance_seat_take_seat_stmt = self.session.prepare("UPDATE performance_seats SET taken_by=? where performance_id=? and seat_number=?;")
-          
-            # # unused 
-            # self.update_performance_seat_free_seat_stmt = self.session.prepare("UPDATE performance_seats SET taken_by=null where performance_id=? and seat_number=?;")
             
             self.select_performance_seats_stmt = self.session.prepare("SELECT * FROM performance_seats where performance_id=?;")
             self.select_performance_seats_stmt.consistency_level = ConsistencyLevel.QUORUM

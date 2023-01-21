@@ -1,5 +1,5 @@
 CREATE KEYSPACE IF NOT EXISTS theatre
-  WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 };
+  WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 2 };
 
 USE Theatre;
 
@@ -20,8 +20,7 @@ CREATE TABLE performances (
   performance_id uuid,
   number_of_seats int,
   PRIMARY KEY (p_date, start_date, title)
-)
-WITH CLUSTERING ORDER BY (start_date ASC);
+);
 
 CREATE TABLE tickets (
   email varchar, 
