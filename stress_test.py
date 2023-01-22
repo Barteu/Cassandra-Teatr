@@ -11,25 +11,25 @@ from reload_db import drop_schema, create_schema
 import random
 
 # number of processes
-N_WORKERS = 10
+N_WORKERS = 500
 
 # number of users (test scenario repeats)
-N_USERS = 10
+N_USERS = 500
 
 # number of performances each user creates
-N_PERFORMANCES = 2
+N_PERFORMANCES = 10
 
 # number of seats for each performance
-N_SEATS = 120
+N_SEATS = 200
 
 # how many tickets can be bought simultaneously by user
-N_MAX_TICKETS_AT_ONCE = 5
+N_MAX_TICKETS_AT_ONCE = 4
 
 # how many attempts to buy tickets(1 to N_MAX_TICKETS_AT_ONCE at once) should be generated for each performance
-N_BUY_TICKETS_ATTEMPTS = 10
+N_BUY_TICKETS_ATTEMPTS = 50
 
 # number of attempts to connect to DB 
-N_DB_CONNECT_ATTEMPTS = 5
+N_DB_CONNECT_ATTEMPTS = 10
 
 f = open("contact_points.txt", "r")
 CONTACT_POINTS = [cp for cp in f.read().splitlines()]
@@ -48,8 +48,8 @@ def add_performances(db, data):
                                         data['uuids'][i],
                                         N_SEATS)
 
-def buy_tickets(db,data):
-
+def buy_tickets(db, data):
+   
     for seat in data['seats_to_buy']:
         performance_id = seat['uuid']
         performances = db.select_performances_by_dates([seat['p_date']])
@@ -96,7 +96,7 @@ def buy_tickets(db,data):
 def jobs(data):
     for i in range(N_DB_CONNECT_ATTEMPTS):
         try:
-            db = Database(CONTACT_POINTS)
+            db = Database(CONTACT_POINTS, disable_prints=True)
             break
         except Exception as e:
             pass
@@ -108,7 +108,7 @@ def jobs(data):
 def jobs_tickets(data):
     for i in range(N_DB_CONNECT_ATTEMPTS):
         try:
-            db = Database(CONTACT_POINTS)
+            db = Database(CONTACT_POINTS, disable_prints=True)
             break
         except Exception as e:
             pass
@@ -117,15 +117,14 @@ def jobs_tickets(data):
     db.finalize()
 
 def test_jobs_tickets_one_thread(data):
-    db = Database(CONTACT_POINTS)
+    db = Database(CONTACT_POINTS, disable_prints=False)
     for d in data:
         buy_tickets(db,d)
     db.finalize()
 
 def test_jobs_one_thread(data):
-    print(1)
-    db = Database(CONTACT_POINTS)
-    print(2)
+
+    db = Database(CONTACT_POINTS, disable_prints=False)
     for d in data:
         create_account(db, d)
         add_performances(db, d)
@@ -164,7 +163,7 @@ def prepare_data():
 
 def shuffle_data_tickets(data):
     # 'seats_to_buy' is a list of dictionaries which contain 'p_date', 'uuid' and 'seats'
-    data_2 =  [ {**dict(id=i), 'seats_to_buy':[] } for i in range(N_USERS-1, -1, -1)]
+    data_2 =  [ {**dict(id=i), 'seats_to_buy':[]} for i in range(N_USERS-1, -1, -1)]
     
     total_tickets_num = 0
     seats_to_buy = []
@@ -190,8 +189,9 @@ data = prepare_data()
 data_2, total_tickets_num = shuffle_data_tickets(data)
 
 
+print("Refreshing database")
 #clear DB
-db = Database(CONTACT_POINTS)
+db = Database(CONTACT_POINTS, disable_prints=False)
 drop_schema(db)
 create_schema(db)
 db.finalize()
@@ -251,12 +251,6 @@ stage_2_all_operations_per_sec = stage_2_all_operations/duration_2
 
 str_stage_2_all= f"{'Operations per sec in stage 2:':<50} {stage_2_all_operations_per_sec:.2f}"
 
-all_operations = stage_1_inserts+stage_2_all_operations
-all_operations_per_sec = all_operations/(duration_1+duration_2)
-
-str_stage_all_op = f"{'Operations per sec in both stages':<50} {all_operations_per_sec:.2f}"
-
 print(str_stage_1_inserts)
 print(str_stage_2_inserts)
 print(str_stage_2_all)
-print(str_stage_all_op)

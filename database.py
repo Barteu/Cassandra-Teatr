@@ -1,12 +1,15 @@
 from cassandra.cluster import Cluster, ExecutionProfile, EXEC_PROFILE_DEFAULT
 from cassandra.cqlengine.query import BatchStatement
 from cassandra import ConsistencyLevel, Timeout
+from cassandra.auth import PlainTextAuthProvider
 import time
 import sys, os
 
+
+
 class Database():
 
-    def __init__(self, addresses=['0.0.0.0'], disable_prints = False, port=9042, timeout=10, connect_timeout=120):
+    def __init__(self, addresses=['0.0.0.0'], disable_prints = False, port=9042, timeout=10, connect_timeout=20):
         
         if disable_prints:
             sys.stdout = open(os.devnull, 'w')
@@ -21,8 +24,12 @@ class Database():
             request_timeout = timeout*32,
             consistency_level=ConsistencyLevel.QUORUM
         )
+
+        ap = PlainTextAuthProvider(username='cassandra', password='cassandra')
+
         self.cluster = Cluster(addresses, 
                                port, 
+                               auth_provider=ap,
                                connect_timeout=connect_timeout,
                                execution_profiles={**{f'profile{j}':ExecutionProfile(request_timeout = timeout*(2**j)) 
                                                    for j in [i for i in range(self.NUM_EXTENDED_TIMEOUT)]}, 
